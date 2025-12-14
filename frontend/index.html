@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>SoundRight — Pronunciation Check</title>
+	</head>
+	<body>
+		<h1>SoundRight — Pronunciation Check</h1>
+		<label
+			>Reference filename (eg: word.wav):
+			<input id="reference" value="example.wav"
+		/></label>
+		<div>
+			<button id="record">Start Recording</button>
+			<button id="stop" disabled>Stop</button>
+		</div>
+		<audio id="play" controls></audio>
+		<div id="result"></div>
+
+		<script>
+			let mediaRecorder,
+				chunks = [];
+			const recordBtn = document.getElementById('record');
+			const stopBtn = document.getElementById('stop');
+			const play = document.getElementById('play');
+
+			recordBtn.onclick = async () => {
+				const stream = await navigator.mediaDevices.getUserMedia({
+					audio: true,
+				});
+				mediaRecorder = new MediaRecorder(stream);
+				mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+				mediaRecorder.onstop = upload;
+				chunks = [];
+				mediaRecorder.start();
+				recordBtn.disabled = true;
+				stopBtn.disabled = false;
+			};
+
+			stopBtn.onclick = () => {
+				mediaRecorder.stop();
+				recordBtn.disabled = false;
+				stopBtn.disabled = true;
+			};
+
+			async function upload() {
+				const blob = new Blob(chunks, { type: 'audio/webm' });
+				play.src = URL.createObjectURL(blob);
+
+				// convert to wav via AudioContext (simple resampling to 16k)
+				const arrayBuffer = await blob.arrayBuffer();
+				const ac = new AudioContext({ sampleRate: 16000 });
+				const audioBuffer = await ac.decodeAudioData(arrayBuffer);
+				const channel = audioBuffer.getChannelData(0);
+				// create WAV
+				function encodeWAV(samples, sampleRate) {
+					const buffer = new ArrayBuffer(44 + samples.length * 2);
+					const view = new DataView(buffer);
+					function writeString(view, offset, string) {
+						for (let i = 0; i < string.length; i++) {
+							view.setUint8(offset + i, string.charCodeAt(i));
+						}
+					}
+					let offset = 0;
+					writeString(view, offset, 'RIFF');
+					offset += 4;
+					view.setUint32(offset, 36 + samples.length * 2, true);
+					offset += 4;
+					writeString(view, offset, 'WAVE');
+					offset += 4;
+					writeString(view, offset, 'fmt ');
+					offset += 4;
+					view.setUint32(offset, 16, true);
+					offset += 4;
+					view.setUint16(offset, 1, true);
+					offset += 2;
+					view.setUint16(offset, 1, true);
+					offset += 2;
+					view.setUint32(offset, sampleRate, true);
+					offset += 4;
+					view.setUint32(offset, sampleRate * 2, true);
+					offset += 4;
+					view.setUint16(offset, 2, true);
+					offset += 2;
+					view.setUint16(offset, 16, true);
+					offset += 2;
+					writeString(view, offset, 'data');
+					offset += 4;
+					view.setUint32(offset, samples.length * 2, true);
+					offset += 4;
+					// PCM 16
+					let idx = 0;
+					for (let i = 0; i < samples.length; i++) {
+						let s = Math.max(-1, Math.min(1, samples[i]));
+						view.setInt16(offset + idx, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+						idx += 2;
+					}
+					return new Blob([view], { type: 'audio/wav' });
+				}
+
+				// resample if needed
+				const offline = new OfflineAudioContext(1, audioBuffer.length, 16000);
+				const src = offline.createBufferSource();
+				src.buffer = audioBuffer;
+				src.connect(offline.destination);
+				src.start(0);
+				const rendered = await offline.startRendering();
+				const samples = rendered.getChannelData(0);
+				const wavBlob = encodeWAV(samples, 16000);
+
+				const form = new FormData();
+				form.append('audio', wavBlob, 'recording.wav');
+				form.append('reference', document.getElementById('reference').value);
+
+				const res = await fetch('http://localhost:5000/score', {
+					method: 'POST',
+					body: form,
+				});
+				const json = await res.json();
+				document.getElementById('result').innerText = JSON.stringify(json);
+			}
+		</script>
+	</body>
+</html>
