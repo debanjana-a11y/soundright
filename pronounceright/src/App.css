@@ -1,0 +1,53 @@
+.App {
+  text-align: center;
+  padding: 20px;
+}
+
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.card {
+  padding: 2em;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+button {
+  padding: 10px 20px;
+  font-size: 1em;
+  cursor: pointer;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  transition: background-color 0.3s;
+}
+
+button.recording-active {
+  background-color: #dc3545; /* Red while recording */
+}
+
+.status-message {
+  margin-top: 15px;
+  color: #555;
+}
+
+.result-box {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.word-display {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #28a745;
+}
